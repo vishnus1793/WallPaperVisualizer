@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallpaper Gallery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        .gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .gallery a {
+            margin: 10px;
+            text-decoration: none;
+        }
+        .gallery img {
+            width: 250px;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s;
+            loading: lazy;
+        }
+        .gallery img:hover {
+            transform: scale(1.05);
+        }
+        .loading {
+            font-size: 18px;
+            font-weight: bold;
+            color: gray;
+        }
+        .error {
+            color: red;
+            font-size: 16px;
+        }
+        input {
+            padding: 8px;
+            width: 60%;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Wallpaper Gallery</h2>
+    <input type="text" id="repoUrl" placeholder="Enter GitHub Repository URL" />
+    <button onclick="fetchImages()">Load Images</button>
+    <p id="status" class="loading"></p>
+    <div class="gallery" id="imageGallery"></div>
+
+    <script>
+        async function fetchImages() {
+            const repoUrl = document.getElementById("repoUrl").value.trim();
+            if (!repoUrl) {
+                alert("Please enter a valid GitHub repository URL.");
+                return;
+            }
+
+            const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+            if (!match) {
+                alert("Invalid GitHub repository URL format.");
+                return;
+            }
+
+            const owner = match[1];
+            const repo = match[2];
+            const branch = "main"; // Change if necessary
+
+            const apiUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
+            const imageGallery = document.getElementById("imageGallery");
+            const status = document.getElementById("status");
+
+            try {
+                status.textContent = "Loading wallpapers...";
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                
+                const data = await response.json();
+                const files = data.tree;
+                imageGallery.innerHTML = "";
+
+                const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+                let imagesFound = 0;
+
+                files.forEach(file => {
+                    if (imageExtensions.some(ext => file.path.endsWith(ext))) {
+                        imagesFound++;
+                        const githubUrl = `https://github.com/${owner}/${repo}/blob/${branch}/${file.path}`;
+
+                        const linkElement = document.createElement("a");
+                        linkElement.href = githubUrl;
+                        linkElement.target = "_blank";
+
+                        const imgElement = document.createElement("img");
+                        imgElement.src = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file.path}`;
+                        imgElement.alt = "Wallpaper";
+
+                        linkElement.appendChild(imgElement);
+                        imageGallery.appendChild(linkElement);
+                    }
+                });
+
+                status.textContent = imagesFound > 0 ? "" : "No images found.";
+            } catch (error) {
+                console.error("Error fetching images:", error);
+                status.textContent = "Failed to load images.";
+                status.classList.add("error");
+            }
+        }
+    </script>
+
+</body>
+</html>
