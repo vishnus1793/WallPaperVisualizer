@@ -86,7 +86,7 @@
 
     <h2>🖼️ GitHub Wallpaper Gallery</h2>
 
-    <input type="text" id="repoUrl" placeholder="https://github.com/user/repo" />
+    <input type="text" id="repoUrl" placeholder="https://github.com/user/repo or /tree/branch" />
     <button onclick="fetchImages()">Load Images</button>
 
     <p id="status" class="status"></p>
@@ -107,7 +107,9 @@
                 return;
             }
 
-            const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+            // ✅ Extract owner, repo, branch (if present)
+            const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)(?:\/tree\/([^\/]+))?/);
+
             if (!match) {
                 alert("Invalid GitHub URL");
                 return;
@@ -115,12 +117,14 @@
 
             const owner = match[1];
             const repo = match[2];
-            const branch = "main";
+            const branch = match[3] || "main";
+
+            console.log(`Using repo: ${owner}/${repo} @ ${branch}`);
 
             try {
-                status.textContent = "🔄 Fetching repository data...";
+                status.textContent = "🔄 Fetching branch info...";
 
-                // ✅ Step 1: Get branch info
+                // ✅ Step 1: Get branch info → tree SHA
                 const branchRes = await fetch(
                     `https://api.github.com/repos/${owner}/${repo}/branches/${branch}`
                 );
@@ -130,7 +134,9 @@
                 const branchData = await branchRes.json();
                 const treeSha = branchData.commit.commit.tree.sha;
 
-                // ✅ Step 2: Fetch full tree recursively
+                // ✅ Step 2: Fetch full recursive tree
+                status.textContent = "📂 Fetching files recursively...";
+
                 const treeRes = await fetch(
                     `https://api.github.com/repos/${owner}/${repo}/git/trees/${treeSha}?recursive=1`
                 );
@@ -141,10 +147,9 @@
                 const files = treeData.tree;
 
                 const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
-
                 let count = 0;
 
-                status.textContent = "📂 Scanning for images...";
+                status.textContent = "🖼️ Rendering images...";
 
                 files.forEach(file => {
                     if (
@@ -155,7 +160,10 @@
                     ) {
                         count++;
 
-                        const imgUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file.path}`;
+                        // ✅ Encode path (fixes broken images)
+                        const encodedPath = encodeURIComponent(file.path).replace(/%2F/g, "/");
+
+                        const imgUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${encodedPath}`;
                         const githubUrl = `https://github.com/${owner}/${repo}/blob/${branch}/${file.path}`;
 
                         const card = document.createElement("div");
@@ -169,6 +177,11 @@
                         img.src = imgUrl;
                         img.loading = "lazy";
 
+                        // ✅ Debug broken images
+                        img.onerror = () => {
+                            console.log("Failed to load:", imgUrl);
+                        };
+
                         const caption = document.createElement("p");
                         caption.textContent = file.path;
 
@@ -181,7 +194,7 @@
                 });
 
                 if (treeData.truncated) {
-                    status.textContent = `⚠️ Repo too large. Showing partial results (${count} images)`;
+                    status.textContent = `⚠️ Repo too large. Partial results (${count} images)`;
                 } else if (count === 0) {
                     status.textContent = "❌ No images found.";
                 } else {
