@@ -4,115 +4,193 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wallpaper Gallery</title>
+
     <style>
         body {
             font-family: Arial, sans-serif;
             text-align: center;
+            margin: 20px;
+            background-color: #f5f5f5;
         }
-        .gallery {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-        .gallery a {
-            margin: 10px;
-            text-decoration: none;
-        }
-        .gallery img {
-            width: 250px;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
-            transition: transform 0.3s;
-            loading: lazy;
-        }
-        .gallery img:hover {
-            transform: scale(1.05);
-        }
-        .loading {
-            font-size: 18px;
-            font-weight: bold;
-            color: gray;
-        }
-        .error {
-            color: red;
-            font-size: 16px;
-        }
-        input {
-            padding: 8px;
-            width: 60%;
+
+        h2 {
             margin-bottom: 10px;
         }
+
+        input {
+            padding: 10px;
+            width: 60%;
+            max-width: 500px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
         button {
-            padding: 8px 12px;
+            padding: 10px 15px;
             cursor: pointer;
+            border: none;
+            background-color: #333;
+            color: white;
+            border-radius: 6px;
+            margin-left: 5px;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
+        .status {
+            font-size: 16px;
+            margin: 10px;
+            color: #666;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: scale(1.04);
+        }
+
+        .card img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        .card p {
+            font-size: 12px;
+            padding: 5px;
+            word-break: break-all;
         }
     </style>
 </head>
 <body>
 
-    <h2>Wallpaper Gallery</h2>
-    <input type="text" id="repoUrl" placeholder="Enter GitHub Repository URL" />
+    <h2>🖼️ GitHub Wallpaper Gallery</h2>
+
+    <input type="text" id="repoUrl" placeholder="https://github.com/user/repo" />
     <button onclick="fetchImages()">Load Images</button>
-    <p id="status" class="loading"></p>
+
+    <p id="status" class="status"></p>
+
     <div class="gallery" id="imageGallery"></div>
 
     <script>
         async function fetchImages() {
             const repoUrl = document.getElementById("repoUrl").value.trim();
+            const gallery = document.getElementById("imageGallery");
+            const status = document.getElementById("status");
+
+            gallery.innerHTML = "";
+            status.className = "status";
+
             if (!repoUrl) {
-                alert("Please enter a valid GitHub repository URL.");
+                alert("Enter a GitHub repository URL");
                 return;
             }
 
             const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
             if (!match) {
-                alert("Invalid GitHub repository URL format.");
+                alert("Invalid GitHub URL");
                 return;
             }
 
             const owner = match[1];
             const repo = match[2];
-            const branch = "main"; // Change if necessary
-
-            const apiUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
-            const imageGallery = document.getElementById("imageGallery");
-            const status = document.getElementById("status");
+            const branch = "main";
 
             try {
-                status.textContent = "Loading wallpapers...";
-                const response = await fetch(apiUrl);
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                
-                const data = await response.json();
-                const files = data.tree;
-                imageGallery.innerHTML = "";
+                status.textContent = "🔄 Fetching repository data...";
+
+                // ✅ Step 1: Get branch info
+                const branchRes = await fetch(
+                    `https://api.github.com/repos/${owner}/${repo}/branches/${branch}`
+                );
+
+                if (!branchRes.ok) throw new Error("Branch not found");
+
+                const branchData = await branchRes.json();
+                const treeSha = branchData.commit.commit.tree.sha;
+
+                // ✅ Step 2: Fetch full tree recursively
+                const treeRes = await fetch(
+                    `https://api.github.com/repos/${owner}/${repo}/git/trees/${treeSha}?recursive=1`
+                );
+
+                if (!treeRes.ok) throw new Error("Failed to fetch repo tree");
+
+                const treeData = await treeRes.json();
+                const files = treeData.tree;
 
                 const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
-                let imagesFound = 0;
+
+                let count = 0;
+
+                status.textContent = "📂 Scanning for images...";
 
                 files.forEach(file => {
-                    if (imageExtensions.some(ext => file.path.endsWith(ext))) {
-                        imagesFound++;
+                    if (
+                        file.type === "blob" &&
+                        imageExtensions.some(ext =>
+                            file.path.toLowerCase().endsWith(ext)
+                        )
+                    ) {
+                        count++;
+
+                        const imgUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file.path}`;
                         const githubUrl = `https://github.com/${owner}/${repo}/blob/${branch}/${file.path}`;
 
-                        const linkElement = document.createElement("a");
-                        linkElement.href = githubUrl;
-                        linkElement.target = "_blank";
+                        const card = document.createElement("div");
+                        card.className = "card";
 
-                        const imgElement = document.createElement("img");
-                        imgElement.src = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file.path}`;
-                        imgElement.alt = "Wallpaper";
+                        const link = document.createElement("a");
+                        link.href = githubUrl;
+                        link.target = "_blank";
 
-                        linkElement.appendChild(imgElement);
-                        imageGallery.appendChild(linkElement);
+                        const img = document.createElement("img");
+                        img.src = imgUrl;
+                        img.loading = "lazy";
+
+                        const caption = document.createElement("p");
+                        caption.textContent = file.path;
+
+                        link.appendChild(img);
+                        card.appendChild(link);
+                        card.appendChild(caption);
+
+                        gallery.appendChild(card);
                     }
                 });
 
-                status.textContent = imagesFound > 0 ? "" : "No images found.";
-            } catch (error) {
-                console.error("Error fetching images:", error);
-                status.textContent = "Failed to load images.";
+                if (treeData.truncated) {
+                    status.textContent = `⚠️ Repo too large. Showing partial results (${count} images)`;
+                } else if (count === 0) {
+                    status.textContent = "❌ No images found.";
+                } else {
+                    status.textContent = `✅ Loaded ${count} images`;
+                }
+
+            } catch (err) {
+                console.error(err);
+                status.textContent = "❌ Error loading images.";
                 status.classList.add("error");
             }
         }
